@@ -23,14 +23,15 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from retriever import retrieve, format_context_block, RetrievedChunk
 
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
 
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 MAX_HISTORY_TURNS = 6      # keep last N user/assistant turns in the prompt
 
 
@@ -135,8 +136,14 @@ def _reformulate_query(query: str, history: list[Turn]) -> str:
     )
     prompt = REWRITE_PROMPT.format(history=history_str, query=query)
 
-    model = genai.GenerativeModel(GEMINI_MODEL)
-    response = model.generate_content(prompt)
+    _client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"],
+        http_options=types.HttpOptions(api_version="v1")
+    )
+    response = _client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+    )
     reformulated = response.text.strip()
     print(f"[query rewrite] '{query}' → '{reformulated}'")
     return reformulated
@@ -240,14 +247,16 @@ def chat(query: str, history: list[Turn]) -> EngineResponse:
     prompt = _build_prompt(query, context_block, history)
 
     # 4. Call Gemini
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        system_instruction=SYSTEM_PROMPT,
+    _client = genai.Client(
+        api_key=os.environ["GEMINI_API_KEY"],
+        http_options=types.HttpOptions(api_version="v1")
     )
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            temperature=0.2,       # low temperature = factual, consistent
+    response = _client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.2,
             max_output_tokens=2048,
         ),
     )
