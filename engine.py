@@ -178,7 +178,7 @@ def _build_prompt(
 
 # ─── Response parsing ──────────────────────────────────────────────────────────
 
-def _parse_response(raw: str, sources: list[RetrievedChunk]) -> EngineResponse:
+def _parse_response(raw: str, sources: list[RetrievedChunk], query: str = "") -> EngineResponse:
     # Extract FORMAT directive
     fmt_match = re.match(r"FORMAT:\s*(markdown|pdf|excel)", raw.strip(), re.IGNORECASE)
     if fmt_match:
@@ -187,6 +187,23 @@ def _parse_response(raw: str, sources: list[RetrievedChunk]) -> EngineResponse:
     else:
         fmt_str = "markdown"
         answer = raw.strip()
+
+    # Override format based on query signals
+    excel_signals = re.compile(
+        r"\b(compare|comparison|across|quarter.by.quarter|all four|q1.*q2|q2.*q3|"
+        r"trend|breakdown|export|excel|spreadsheet|year.over.year|multi.year|"
+        r"each quarter|every quarter|historical)\b",
+        re.IGNORECASE,
+    )
+    pdf_signals = re.compile(
+        r"\b(report|summary|analysis|analyse|analyze|comprehensive|overview|"
+        r"explain|describe|narrative|deep.dive)\b",
+        re.IGNORECASE,
+    )
+    if excel_signals.search(query) and fmt_str == "markdown":
+        fmt_str = "excel"
+    elif pdf_signals.search(query) and fmt_str == "markdown":
+        fmt_str = "pdf"
 
     output_format = OutputFormat(fmt_str)
 
@@ -260,4 +277,4 @@ def chat(query: str, history: list[Turn]) -> EngineResponse:
     raw = response.choices[0].message.content
 
     # 5. Parse and return
-    return _parse_response(raw, chunks)
+    return _parse_response(raw, chunks, query=query)

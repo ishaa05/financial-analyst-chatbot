@@ -21,7 +21,7 @@ import re
 import textwrap
 from datetime import datetime
 from pathlib import Path
-
+from groq import Groq
 import google.generativeai as genai
 import openpyxl
 from fpdf import FPDF
@@ -100,7 +100,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             pdf.ln(4)
             pdf.set_font("Helvetica", "B", 16)
             pdf.set_text_color(*INFOSYS_BLUE)
-            pdf.multi_cell(0, 9, line[2:])
+            pdf.multi_cell(0, 9, _safe(line[2:]))
             # underline
             pdf.set_draw_color(*INFOSYS_BLUE)
             pdf.set_line_width(0.5)
@@ -188,14 +188,22 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
         i += 1
 
 
+def _safe(text: str) -> str:
+    """Sanitize text for FPDF latin-1 rendering."""
+    text = text.replace("\u2026", "...").replace("\u2013", "-").replace("\u2014", "--")
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    text = text.encode("latin-1", errors="ignore").decode("latin-1")
+    return text.strip()
+
+
 def _render_table(pdf: InfysysPDF, table_lines: list[str]) -> None:
     """Render a markdown table into the PDF as a formatted grid."""
-    # Parse rows
     rows = []
     for line in table_lines:
-        if re.match(r"^\|[-: |]+\|$", line):   # separator row
+        if re.match(r"^\|[-: |]+\|$", line):
             continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        cells = [_safe(c.strip()) for c in line.strip("|").split("|")]
         rows.append(cells)
 
     if not rows:
@@ -204,7 +212,21 @@ def _render_table(pdf: InfysysPDF, table_lines: list[str]) -> None:
     headers = rows[0]
     data_rows = rows[1:]
     col_count = len(headers)
-    col_w = 170 / col_count
+
+    if col_count == 0:
+        return
+
+    # Too many columns — fall back to plain text
+    if col_count > 6:
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_text_color(*MID_GRAY)
+        pdf.multi_cell(0, 5, "[Wide table — download Excel for full data]")
+        pdf.set_text_color(*DARK_GRAY)
+        return
+
+    available_w = 170
+    col_w = max(available_w / col_count, 20)  # minimum 20mm per column
+    max_chars = max(int(col_w / 1.8), 6)
 
     pdf.ln(2)
     # Header row
@@ -212,10 +234,10 @@ def _render_table(pdf: InfysysPDF, table_lines: list[str]) -> None:
     pdf.set_fill_color(*INFOSYS_BLUE)
     pdf.set_text_color(*WHITE)
     for h in headers:
-        pdf.cell(col_w, 7, h[:30], border=0, fill=True, align="C")
+        pdf.cell(col_w, 7, _safe(h)[:max_chars], border=0, fill=True, align="C")
     pdf.ln()
 
-    # Data rows (alternating shading)
+    # Data rows
     pdf.set_font("Helvetica", "", 9)
     for row_idx, row in enumerate(data_rows):
         if row_idx % 2 == 0:
@@ -223,21 +245,26 @@ def _render_table(pdf: InfysysPDF, table_lines: list[str]) -> None:
         else:
             pdf.set_fill_color(*WHITE)
         pdf.set_text_color(*DARK_GRAY)
-        # Pad or truncate row cells to match header count
         padded = (row + [""] * col_count)[:col_count]
         for cell in padded:
-            pdf.cell(col_w, 6, str(cell)[:40], border=0, fill=True)
+            pdf.cell(col_w, 6, _safe(str(cell))[:max_chars], border=0, fill=True)
         pdf.ln()
 
     pdf.set_text_color(*DARK_GRAY)
 
 
 def _strip_inline_md(text: str) -> str:
-    """Remove inline markdown (bold, italic, code) from text."""
+    """Remove inline markdown and sanitize non-latin characters for FPDF."""
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"\*(.+?)\*",     r"\1", text)
     text = re.sub(r"`(.+?)`",       r"\1", text)
     text = re.sub(r"_(.+?)_",       r"\1", text)
+    # Replace unicode punctuation with ASCII equivalents
+    text = text.replace("\u2026", "...").replace("\u2013", "-").replace("\u2014", "--")
+    text = text.replace("\u2018", "'").replace("\u2019", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    # Drop any remaining non-latin1 characters
+    text = text.encode("latin-1", errors="ignore").decode("latin-1")
     return text
 
 
@@ -251,7 +278,7 @@ def generate_pdf(response: EngineResponse, query: str) -> Path:
     - Appendix: all retrieved source citations
     """
     # Derive a short report title from the query
-    title_text = query[:60] + ("…" if len(query) > 60 else "")
+    title_text = query[:60] + ("..." if len(query) > 60 else "")
 
     pdf = InfysysPDF(title=title_text)
     pdf.add_page()
@@ -263,7 +290,8 @@ def generate_pdf(response: EngineResponse, query: str) -> Path:
     pdf.multi_cell(0, 12, "Infosys Financial Intelligence")
     pdf.set_font("Helvetica", "", 12)
     pdf.set_text_color(*MID_GRAY)
-    pdf.multi_cell(0, 8, f"Query: {query}")
+    safe_query = query.encode("latin-1", errors="ignore").decode("latin-1")
+    pdf.multi_cell(0, 8, f"Query: {safe_query}")
     pdf.ln(4)
     pdf.set_draw_color(*INFOSYS_BLUE)
     pdf.line(20, pdf.get_y(), 190, pdf.get_y())
@@ -342,15 +370,16 @@ Answer to extract from:
 
 
 def _extract_excel_data(answer: str) -> list[dict]:
-    """Ask Gemini to extract structured tables from the markdown answer."""
+    """Ask Groq to extract structured tables from the markdown answer."""
     prompt = EXCEL_EXTRACTION_PROMPT.format(answer=answer)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(temperature=0, max_output_tokens=2048),
+    _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    response = _client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        max_tokens=2048,
     )
-    raw = response.text.strip()
-    # Strip any accidental markdown fences
+    raw = response.choices[0].message.content.strip()
     raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
     raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
     data = json.loads(raw)
