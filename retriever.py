@@ -163,6 +163,9 @@ def format_context_block(chunks: list[RetrievedChunk]) -> str:
         if chunk.section:
             loc += f" | section: {chunk.section}"
 
+        # Truncate content to 1000 chars to stay within token limits
+        content = chunk.content[:1000] + ("..." if len(chunk.content) > 1000 else "")
+
         parts.append(
             f'<source id="{i}" doc="{chunk.doc_label}"{loc}>\n'
             f"{chunk.content}\n"
