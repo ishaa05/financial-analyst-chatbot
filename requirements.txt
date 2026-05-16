@@ -1,0 +1,15 @@
+streamlit
+google-genai
+python-dotenv
+chromadb
+sentence-transformers
+pdfplumber
+pandas
+openpyxl
+fpdf2
+rich
+tabulate
+torch
+transformers
+xlrd
+google-generativeai
