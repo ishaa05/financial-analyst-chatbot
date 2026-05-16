@@ -13,3 +13,4 @@ torch
 transformers
 xlrd
 google-generativeai
+torchvision
