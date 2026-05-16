@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
@@ -33,6 +33,7 @@ from retriever import retrieve, format_context_block, RetrievedChunk
 
 GEMINI_MODEL = "gemini-2.0-flash"
 MAX_HISTORY_TURNS = 6      # keep last N user/assistant turns in the prompt
+load_dotenv()
 
 
 class OutputFormat(str, Enum):

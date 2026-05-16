@@ -27,8 +27,8 @@ from formatters import generate_pdf, generate_excel
 
 # ─── Setup ─────────────────────────────────────────────────────────────────────
 
-load_dotenv()
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# load_dotenv()
+# genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 st.set_page_config(
     page_title="Infosys Financial Analyst",
