@@ -13,3 +13,4 @@ torch
 transformers
 xlrd
 torchvision
+groq

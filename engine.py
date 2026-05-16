@@ -25,13 +25,13 @@ from typing import Any
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-
+from groq import Groq
 from retriever import retrieve, format_context_block, RetrievedChunk
 
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
 
-GEMINI_MODEL = "gemini-2.0-flash"
+LLM_MODEL = "llama-3.3-70b-versatile"
 MAX_HISTORY_TURNS = 6      # keep last N user/assistant turns in the prompt
 load_dotenv()
 
@@ -137,15 +137,14 @@ def _reformulate_query(query: str, history: list[Turn]) -> str:
     )
     prompt = REWRITE_PROMPT.format(history=history_str, query=query)
 
-    _client = genai.Client(
-        api_key=os.environ["GEMINI_API_KEY"],
-        http_options=types.HttpOptions(api_version="v1")
+    _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    response = _client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=200,
     )
-    response = _client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-    )
-    reformulated = response.text.strip()
+    reformulated = response.choices[0].message.content.strip()
     print(f"[query rewrite] '{query}' → '{reformulated}'")
     return reformulated
 
@@ -247,21 +246,18 @@ def chat(query: str, history: list[Turn]) -> EngineResponse:
     context_block = format_context_block(chunks)
     prompt = _build_prompt(query, context_block, history)
 
-    # 4. Call Gemini
-    _client = genai.Client(
-        api_key=os.environ["GEMINI_API_KEY"],
-        http_options=types.HttpOptions(api_version="v1")
+    # 4. Call Groq
+    _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    response = _client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+        max_tokens=2048,
     )
-    response = _client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.2,
-            max_output_tokens=2048,
-        ),
-    )
-    raw = response.text
+    raw = response.choices[0].message.content
 
     # 5. Parse and return
     return _parse_response(raw, chunks)
