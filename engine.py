@@ -111,6 +111,33 @@ Reformulated query:"""
 
 # ─── Query reformulation ───────────────────────────────────────────────────────
 
+import time
+
+def _groq_generate(messages, max_tokens=2048, temperature=0.2, model=None) -> str:
+    _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    model = model or LLM_MODEL
+    retries = 3
+    wait = 10
+    while retries:
+        try:
+            response = _client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                retries -= 1
+                if retries == 0:
+                    raise
+                print(f"Rate limit hit, waiting {wait}s...")
+                time.sleep(wait)
+                wait *= 2
+            else:
+                raise
+
 def _reformulate_query(query: str, history: list[Turn]) -> str:
     """
     Expand short follow-ups using conversation history.
@@ -144,7 +171,12 @@ def _reformulate_query(query: str, history: list[Turn]) -> str:
         temperature=0.0,
         max_tokens=200,
     )
-    reformulated = response.choices[0].message.content.strip()
+    reformulated = _groq_generate(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=200,
+        temperature=0.0,
+        model="llama-3.1-8b-instant",  # smaller model for reformulation
+    ).strip()
     print(f"[query rewrite] '{query}' → '{reformulated}'")
     return reformulated
 
@@ -274,7 +306,14 @@ def chat(query: str, history: list[Turn]) -> EngineResponse:
         temperature=0.2,
         max_tokens=2048,
     )
-    raw = response.choices[0].message.content
+    raw = _groq_generate(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+        max_tokens=2048,
+    )
 
     # 5. Parse and return
     return _parse_response(raw, chunks, query=query)

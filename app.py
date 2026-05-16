@@ -214,8 +214,8 @@ if query:
         clean_answer = _clean_answer(response.answer)
         st.markdown(clean_answer)
 
-        # Show citation pills
-        if response.citations:
+        # Show citation pills only if answer has actual content
+        if response.citations and "[source: none]" not in response.answer:
             st.markdown(_render_citations(response.citations), unsafe_allow_html=True)
 
         # Generate and offer download file
@@ -239,7 +239,7 @@ if query:
                 )
 
         # Source passage expander
-        if response.sources:
+        if response.sources and "[source: none]" not in response.answer:
             with st.expander("📎 View source passages"):
                 for chunk in response.sources[:5]:
                     st.markdown(f"**{chunk.doc_label}**"
