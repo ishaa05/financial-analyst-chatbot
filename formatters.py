@@ -472,6 +472,9 @@ def generate_excel(response: EngineResponse, query: str) -> Path:
     2. Write each table to its own sheet.
     3. Add an "About" sheet with the original query and source list.
     """
+    
+    
+
     sheets_data = _extract_excel_data(response.answer)
 
     wb = openpyxl.Workbook()
