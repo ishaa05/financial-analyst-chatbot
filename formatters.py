@@ -377,18 +377,45 @@ Answer to extract from:
 def _extract_excel_data(answer: str) -> list[dict]:
     """Ask Groq to extract structured tables from the markdown answer."""
     prompt = EXCEL_EXTRACTION_PROMPT.format(answer=answer)
-    _client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    response = _client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        max_tokens=2048,
-    )
-    raw = response.choices[0].message.content.strip()
-    raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
-    raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
-    data = json.loads(raw)
-    return data.get("sheets", [])
+    try:
+        _client = Groq(api_key=os.environ["GROQ_API_KEY"])
+        response = _client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=2048,
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?", "", raw, flags=re.MULTILINE).strip()
+        raw = re.sub(r"```$", "", raw, flags=re.MULTILINE).strip()
+        # Find the first { and last } to extract just the JSON object
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start == -1 or end == 0:
+            raise ValueError("No JSON object found in response")
+        raw = raw[start:end]
+        data = json.loads(raw)
+        return data.get("sheets", [])
+    except Exception as e:
+        print(f"Excel extraction failed: {e}")
+        # Fallback: parse markdown table from answer directly
+        sheets = []
+        lines = answer.split("\n")
+        table_lines = [l for l in lines if l.strip().startswith("|")]
+        if table_lines:
+            headers = [c.strip() for c in table_lines[0].strip("|").split("|")]
+            rows = []
+            for line in table_lines[2:]:  # skip header and separator
+                cells = [c.strip() for c in line.strip("|").split("|")]
+                if cells:
+                    rows.append(cells)
+            sheets.append({
+                "name": "Data",
+                "description": "Extracted from answer",
+                "headers": headers,
+                "rows": rows,
+            })
+        return sheets
 
 
 def _style_header_row(ws, header_row_num: int, col_count: int) -> None:
