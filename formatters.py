@@ -100,6 +100,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             pdf.ln(4)
             pdf.set_font("Helvetica", "B", 16)
             pdf.set_text_color(*INFOSYS_BLUE)
+            pdf.set_x(20)
             pdf.multi_cell(170, 9, _safe(line[2:]))
             # underline
             pdf.set_draw_color(*INFOSYS_BLUE)
@@ -115,6 +116,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             pdf.ln(3)
             pdf.set_font("Helvetica", "B", 13)
             pdf.set_text_color(*INFOSYS_BLUE)
+            pdf.set_x(20)
             pdf.multi_cell(170, 8, _safe(line[3:]))
 
         # ── Heading 3 ─────────────────────────────────────────────────────────
@@ -122,6 +124,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             pdf.ln(2)
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(*MID_GRAY)
+            pdf.set_x(20)
             pdf.multi_cell(0, 7, _safe(line[4:]))
 
         # ── Markdown table ────────────────────────────────────────────────────
@@ -143,6 +146,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             pdf.set_x(25)
             pdf.cell(5, 6, "-")
             pdf.set_x(30)
+            pdf.set_x(20)
             pdf.multi_cell(160, 6, text)
 
         # ── Source citation line ([source:N] or ## Sources) ───────────────────
@@ -151,6 +155,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
                 pdf.ln(4)
                 pdf.set_font("Helvetica", "B", 11)
                 pdf.set_text_color(*MID_GRAY)
+                pdf.set_x(20)
                 pdf.multi_cell(170, 7, "Sources")
                 pdf.set_text_color(*DARK_GRAY)
             else:
@@ -180,6 +185,7 @@ def _md_to_pdf(pdf: InfysysPDF, markdown_text: str) -> None:
             # Remove [source:N] from body text
             text = re.sub(r"\[source:\d+\]", "", text).strip()
             if text:
+                pdf.set_x(20)
                 pdf.multi_cell(170, 6, text)
 
         i += 1
@@ -217,6 +223,7 @@ def _render_table(pdf: InfysysPDF, table_lines: list[str]) -> None:
     if col_count > 6:
         pdf.set_font("Helvetica", "I", 9)
         pdf.set_text_color(*MID_GRAY)
+        pdf.set_x(20)
         pdf.multi_cell(0, 5, "[Wide table — download Excel for full data]")
         pdf.set_text_color(*DARK_GRAY)
         return
@@ -280,20 +287,17 @@ def generate_pdf(response: EngineResponse, query: str) -> Path:
     pdf = InfysysPDF(title=title_text)
     pdf.add_page()
 
-    # ── Cover block ────────────────────────────────────────────────────────────
+   # ── Cover block ────────────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(*INFOSYS_BLUE)
     pdf.ln(8)
+    pdf.set_x(20)
     pdf.multi_cell(170, 12, "Infosys Financial Intelligence")
     pdf.set_font("Helvetica", "", 12)
     pdf.set_text_color(*MID_GRAY)
     safe_query = query.encode("latin-1", errors="ignore").decode("latin-1")
+    pdf.set_x(20)
     pdf.multi_cell(170, 8, f"Query: {safe_query}")
-    pdf.ln(4)
-    pdf.set_draw_color(*INFOSYS_BLUE)
-    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-    pdf.ln(6)
-    pdf.set_text_color(*DARK_GRAY)
 
     # ── Main answer ────────────────────────────────────────────────────────────
     _md_to_pdf(pdf, response.answer)
@@ -314,14 +318,18 @@ def generate_pdf(response: EngineResponse, query: str) -> Path:
             page_str = f", page {cite['page']}" if cite.get("page") else ""
             section_str = f" - {_safe(str(cite.get('section', '')))}"  if cite.get("section") else ""
             cite_line = _safe(f"[{cite['id']}] {cite['label']}{page_str}{section_str}")
+            pdf.set_x(20)
             pdf.multi_cell(170, 7, cite_line)
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(*MID_GRAY)
             for chunk in response.sources:
                 if chunk.doc_label == cite["label"]:
-                    snippet = _safe(chunk.content[:300].replace("\n", " "))
+                    raw = chunk.content.replace("\n", " ").replace("\r", " ")
+                    raw = re.sub(r"\s+", " ", raw).strip()
+                    snippet = _safe(raw[:400])
+                    pdf.set_x(20)
                     pdf.multi_cell(170, 5, f'"{snippet}..."')
-                    pdf.ln(1)
+                    pdf.ln(2)
                     break
 
     out_path = _output_path("infosys_report", "pdf")
