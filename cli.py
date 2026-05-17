@@ -17,8 +17,8 @@ import os
 import textwrap
 from pathlib import Path
 
-import google.generativeai as genai
 from dotenv import load_dotenv
+load_dotenv()
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -30,14 +30,14 @@ from engine import chat, Turn, OutputFormat, EngineResponse
 from formatters import generate_pdf, generate_excel
 
 load_dotenv()
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
 
 console = Console(width=100)
 
 BANNER = """
 ╔══════════════════════════════════════════════════════════════╗
 ║        INFOSYS FINANCIAL ANALYST  ·  CLI Interface          ║
-║  Powered by Gemini 1.5 Flash  ·  RAG over 7 source docs     ║
+║  Powered by LLaMA-3.3-70B  ·  RAG over 7 source docs     ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
