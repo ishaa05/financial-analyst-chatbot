@@ -138,7 +138,7 @@ def _clean_answer(answer: str) -> str:
 # ─── Chat display ───────────────────────────────────────────────────────────────
 
 st.title("📊 Infosys Financial Analyst")
-st.caption("Powered by Gemini 1.5 Flash · Grounded in official Infosys documents")
+st.caption("Powered by RAG + Groq Llama 3 · Grounded in official Infosys documents")
 
 # Replay existing messages
 for msg in st.session_state.display_messages:
